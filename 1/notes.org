@@ -1,0 +1,4 @@
+input: calibration doc (corrupted)
+
+calibration value: concat first and last digits (mixed with letters)
+

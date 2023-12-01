@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+"""On the first day of Christmas my true love gave to me,
+spaghetti [code]."""
+
+import sys
+import re
+
+english_to_numeral = [
+    (eng, str(n)) for n, eng in enumerate(['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'], 1)
+]
+
+fname = 'input'
+f = open(fname, 'r')
+
+calib_sum = 0
+
+for line in f:
+    first_number = None
+    last_number = None
+
+    numeral_line = ''
+
+    # You can write bad C in any language :)
+    # Not bothering with efficiency in runtime or SLOC
+
+    # Find first number in line.
+    acc = ''
+    engnum = ''
+    for c in line:
+        if not (first_number is None):
+            break
+        if c in list(zip(*english_to_numeral))[1]:
+            first_number = c
+            break
+        engnum += c
+        for eng, numeral in english_to_numeral:
+            if eng in engnum:
+                first_number = numeral
+                break
+    acc += engnum
+    numeral_line += acc
+
+    # Find last number, reading backwards (important!)
+    acc = ''
+    engnum = ''
+    for c in line[::-1]:
+        if not (last_number is None):
+            break
+        if c in list(zip(*english_to_numeral))[1]:
+            last_number = c
+            break
+        engnum = c + engnum
+        for eng, numeral in english_to_numeral:
+            if eng in engnum:
+                last_number = numeral
+    acc += engnum
+    numeral_line += acc
+
+    calib_val = int(first_number) *10+ int(last_number)
+    #print(first_number, last_number, calib_val)
+
+    ## v First stage artefact v
+    # numerals = [ ord(c)-ord('0') for c in line if ord(c)-ord('0') in range(10) ]
+
+    # if len(numerals) < 1:
+    #     if (line == '\n'):
+    #         break
+    #     else:
+    #         raise Exception(':(')
+    # calib_val = numerals[0]*10 + numerals[-1]
+    #print (line, '-> ' + numeral_line, numerals, calib_val)
+    calib_sum += calib_val
+
+print (calib_sum)
+
