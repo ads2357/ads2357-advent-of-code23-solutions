@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+
+import re
+import sys
+import collections
+import functools
+
+RE_COUNT=re.compile(r'(\d+) ([a-z]+)([;,]*)[ \n]')
+RE_GAME=re.compile(r'Game (\d+)')
+PART=1
+
+infile = 'sample-input' if len(sys.argv) < 2 else sys.argv[1]
+
+ColourCount = collections.namedtuple('ColourCount', 'colour count')
+
+filter_hand_possible = [
+    lambda colourcounts: all((colcnt.colour=='red' and colcnt.count <= 12)
+                             or (colcnt.colour=='green' and colcnt.count <= 13)
+                             or (colcnt.colour=='blue' and colcnt.count <= 14)
+                             for colcnt in colourcounts)
+]
+
+with open(infile, 'r') as f:
+    lines = (line for line in f if line != '\n')
+    matches = ( (line, RE_GAME.match(line), RE_COUNT.findall(line)) for line in lines )
+
+    game_sum = 0
+
+    for (line, gmatch, countfinds) in matches:
+        game_id = int(gmatch.group(1))
+
+        hands = []
+        hand = []
+
+        game_score = game_id
+        for find in countfinds:
+            findtup = ColourCount(count=int(find[0]), colour=find[1])
+            hand.append(findtup)
+
+            if find[2] != ',': # end of hand
+                hands.append(hand)
+                hand = []
+
+        max_counts = {col : 0 for col in ('red', 'green', 'blue') }
+
+        for hand in hands:
+            # part 1
+            # # over-engineered for multiple filters
+            if not all(filt(hand) for filt in filter_hand_possible):
+                game_score *= 0
+
+            # part 2
+            for colcnt in hand:
+                max_counts[colcnt.colour] = max(max_counts[colcnt.colour], colcnt.count)
+
+        # part 1
+        if PART == 1:
+            game_sum += game_score
+        # part 2
+        else:
+            game_sum += functools.reduce(lambda a, b: a*b, max_counts.values())
+
+print (game_sum)
