@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+
+import sys
+import re
+
+PUZZLE_PART = 2
+
+fname = 'sample-input' if len(sys.argv)<2 else sys.argv[1]
+f = open(fname, 'r')
+lines = f.readlines()
+f.close()
+
+if PUZZLE_PART == 1:
+    # List of times, list of dists
+    times = (int(t) for t in lines[0].split(':')[1].split())
+    dists = (int(d) for d in lines[1].split(':')[1].split())
+else:
+    # Single time and dist numbers, but with bad keming needing correction.
+    # Store these as single element lists for consistency.
+    times = [int(t) for t in [''.join(lines[0].split(':')[1].split())]]
+    dists = [int(d) for d in [''.join(lines[1].split(':')[1].split())]]
+    print (times, dists)
+
+races = zip(times, dists)
+
+ID_ELEM_ADD = 0
+ID_ELEM_MUL = 1
+
+acc = ID_ELEM_MUL # d'oh!
+for time, dist in races:
+    # conserve brain energy, don't be clever, re-algorithm only if
+    # computer can't cope
+    charge_times = range(time)
+    # speed = charge time, travel time = time - charge time
+    ct_dists = ( ct * (time - ct) for ct in charge_times )
+    winning_dists = filter(None, (ctd > dist for ctd in ct_dists) )
+    acc *= sum(winning_dists)
+
+print(acc)
+
