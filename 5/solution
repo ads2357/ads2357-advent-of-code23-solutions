@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+
+"""Solve the day 5 challenge (gardening) using a functional
+programming idiom in Python. (Programming style chosen for
+variety.)
+
+"""
+
+import collections
+import sys
+import re
+import functools
+
+class Range:
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def getStart(self):
+        return self.start
+
+    def getEnd(self):
+        return self.end
+
+    def length(self):
+        return self.end - self.start + 1
+
+    def isNull(self):
+        return self.end < self.start
+
+    def __repr__(self):
+        return 'r[{}, {}]¬'.format(self.getStart(), self.getEnd())
+
+    def __lt__(self, other):
+        return self.start < other.getStart()
+
+def flatten_listlist(ll):
+    return functools.reduce(lambda la, lb: la + lb, ll, [])
+
+# Provide a generic partially applied function, as a class.
+# (Lambdas, and defs, access, but do not copy, variables in the outer
+# scope.)
+class CurriedFunction:
+    def __init__(self, f, part_args):
+        self.f = f
+        self.part_args = part_args
+
+    def call(self, rest_args):
+        return self.f(*(self.part_args + [rest_args]))
+
+class AgMap:
+    """A mapping of ranges of agricultural elements in one class to those in another class."""
+    def __init__(self, func, name):
+        self.func = func
+        self.namefrom, self.nameto = name.split('-to-')
+
+    def range_to_dst_ranges(self, rg):
+        """Map a range of 'source' elements to ranges of 'destination' elements according to the mapping."""
+        return self.func.call(rg)
+
+    def compose(self, other):
+        """Create a new AgMap which carries out both mappings chained together."""
+        assert self.nameto == other.namefrom
+        cf = CurriedFunction(lambda self_, o, rg: flatten_listlist([o.range_to_dst_ranges(r) for r in self_.range_to_dst_ranges(rg)]), [self, other])
+        return AgMap(cf, '{}-to-{}'.format(self.namefrom, other.nameto))
+
+def split_range_by_overlap(range_in, range_src):
+    """For the range_in Range, return which part overlaps with range_src, and which parts do not."""
+    range_beforesrc = Range(range_in.getStart(), min((range_in.getEnd(), range_src.getStart()-1)))
+    range_aftersrc  = Range(max(range_in.getStart(), range_src.getEnd()+1), range_in.getEnd())
+    range_insrc     = Range(max(range_in.getStart(), range_src.getStart()), min(range_in.getEnd(), range_src.getEnd()))
+
+    return (range_insrc, [range_beforesrc, range_aftersrc])
+
+# Format:
+#(seeds <seed>+|<name> map:\n(<dst> <src> <len>\n)+)\n
+
+RE_MAP_HEADER = re.compile(r'(?P<name>(?P<from>[a-z]+)-to-(?P<to>[a-z]+)) map:')
+RE_DST_SRC_LEN = re.compile(r'(?P<dst>\d+) (?P<src>\d+) (?P<len>\d+)')
+RE_SEED_LIST = re.compile(r'seeds: (?P<seedlist>(?:\d+\s*)+)')
+
+def make_maps(lines):
+    """Parse multiple mappings and return a dict of these, as AgMap's mapping ranges."""
+    # FIXME: Consider separating parsing from functionality.
+
+    maps = {}
+    map_parts = []
+    curr_mapname = None
+    curr_fromid = None
+
+    for line in lines:
+
+        # Create new map if encountering a map header
+        m_head = RE_MAP_HEADER.match(line)
+        if (m_head):
+            curr_mapname = m_head['name']
+            curr_fromid  = m_head['from']
+            # Base case: identity mapping. Include name for ease of
+            # debug in the functional style. (Don't care about
+            # performance; the algorithm is efficient.)
+            c = CurriedFunction((lambda name, fun, sst, dst, l, range_in: [range_in]), ['id', None, None, None, None])
+            agmap = AgMap(c, curr_mapname)
+            maps[curr_fromid] = agmap
+            continue
+
+        # Otherwise, use the map body line to define a new region of
+        # mapping in the map. Implement these as successive mappings,
+        # because the src ranges do not overlap.
+        m_range = RE_DST_SRC_LEN.match(line)
+        if (m_range):
+            srcstart = int(m_range['src'])
+            dststart = int(m_range['dst'])
+            length = int(m_range['len'])
+
+            # Take existing mapping function and combine it with the function of the new line
+            fun = maps[curr_fromid].func
+
+            def apply_map_part(arg_name, arg_fun, arg_srcstart, arg_dststart, arg_length, arg_range_in):
+                range_src = Range(arg_srcstart, arg_srcstart + arg_length - 1)
+                translatable_range, remaining_ranges = split_range_by_overlap(arg_range_in, range_src)
+                src_offset = translatable_range.getStart() - arg_srcstart
+                dst = arg_dststart + src_offset
+                translated_range = Range(dst, dst + translatable_range.length() - 1)
+                ranges = ([ rg for rg in [translated_range] if not rg.isNull()  ]
+                          + flatten_listlist([ arg_fun.call(rg) for rg in remaining_ranges if not rg.isNull() ])
+                          )
+                range_in_after_translation = [ rg for rg in ranges if not rg.isNull() ]
+                retval = range_in_after_translation
+                return retval
+
+            cf = CurriedFunction(
+                apply_map_part,
+                [ curr_mapname, fun, srcstart, dststart, length ]
+            )
+
+            maps[curr_fromid].func = cf
+
+    return maps
+
+def compose_maps(maps):
+    acc = maps['seed']
+    while acc.nameto != 'location':
+        acc = acc.compose(maps[acc.nameto])
+    return acc
+
+if __name__ == "__main__":
+    infilename = 'sample-input' if len(sys.argv) <=1 else sys.argv[1]
+    infile = open(infilename, 'r')
+    lines = infile.readlines() # not suitable for huge files
+    m = RE_SEED_LIST.match(lines[0])
+
+    # Part 1 seeds
+    #seeds = [int(sstr) for sstr in m['seedlist'].split()]
+    #seedranges = [Range(s, s) for s in seeds]
+
+    #Part 2 seeds
+    seeds = [int(sstr) for sstr in m['seedlist'].split()]
+    seedranges = []
+    while len(seeds):
+        start = seeds[0]
+        length = seeds[1]
+        seedranges.append(Range(start, start+length-1))
+        seeds = seeds[2:]
+
+    ##
+    maps = make_maps(lines[1:])
+    composed_map = compose_maps(maps)
+    ranges = [composed_map.range_to_dst_ranges(sr) for sr in seedranges]
+
+    # Part 1 single seeds and locations
+    #assert all(len(rs) == 1 for rs in ranges)
+    #range_starts = flatten_listlist([[r.getStart() for r in rr] for rr in ranges])
+    #print(min(range_starts))
+
+    # Part 2 location ranges
+    all_ranges = flatten_listlist(ranges)
+    print(min(all_ranges))
