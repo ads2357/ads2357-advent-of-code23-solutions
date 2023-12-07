@@ -40,6 +40,8 @@ def flatten_listlist(ll):
 # Provide a generic partially applied function, as a class.
 # (Lambdas, and defs, access, but do not copy, variables in the outer
 # scope.)
+#
+# EDIT: turns out there is functools.partial.
 class CurriedFunction:
     def __init__(self, f, part_args):
         self.f = f
