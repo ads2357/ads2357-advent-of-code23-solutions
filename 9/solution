@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+#PART=1
+PART=2
+
+infile = 'input2'
+#infile = 'sample-input'
+
+with open(infile, 'r') as f:
+    lines = f.readlines()
+
+negator = 1 if PART==1 else -1
+
+def extrapolate(seq):
+    diffs = [seq]
+    print()
+    print (seq)
+
+    while not all(d==0 for d in diffs[-1]):
+        # append a new layer of the differences (not absolute
+        # differences) Part 2: operating on reversed lists, swap
+        # operands of subtraction, in effect, by negating one of them.
+        diffs.append([(diffs[-1][ii+1] - diffs[-1][ii])*negator for ii in range(len(diffs[-1])-1)])
+        print(diffs[-1])
+
+    for ii in list(range(len(diffs)))[:0:-1]:
+        # Part 2: subtract instead of add as per task.
+        diffs[ii-1].append(diffs[ii-1][-1] + diffs[ii][-1]*negator)
+        print(diffs[ii-1])
+
+    return diffs[0][-1]
+
+def lines_to_nested_lists(ll):
+    nl = []
+    for line in ll:
+        if line.strip():
+            nl.append([int(s) for s in line.split()])
+
+            if PART==2:
+                nl[-1] = nl[-1][::-1]
+
+    return nl
+
+sequences = lines_to_nested_lists(lines)
+
+acc = 0
+for seq in sequences:
+    acc += extrapolate(seq)
+
+print(acc)
