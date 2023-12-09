@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+import functools
+import itertools
+import re
+import sys
+import math
+
+RE_LR=re.compile(r'(?P<leftright>[LR]+)')
+RE_EDGES=re.compile(r'(?P<src>[0-9A-Z]+)\s+=\s+\((?P<dst0>[0-9A-Z]+),\s(?P<dst1>[0-9A-Z]+)\)')
+
+PART=2
+
+class DesertMap:
+    def __init__(self, lines):
+        self.net = {
+            m['src'] : { 'L': m['dst0'], 'R': m['dst1'] }
+            for m in (
+                    RE_EDGES.match(l) for l in lines
+            ) if m
+        }
+
+    def succ_node(self, lr, start):
+        return self.net[start][lr]
+
+    def get_starts(self,start_char='A'):
+        if PART==2:
+            return [k for k in self.net.keys() if k[-1] == start_char]
+        else:
+            return [k for k in self.net.keys() if k == 3*start_char]
+
+class RouteLike:
+    def __init__(self, looplength, z_steps):
+        self._looplength = looplength
+        self.z_steps = z_steps
+
+    def looplength(self):
+        return self._looplength
+
+    def zsteps(self):
+        return self.z_steps.copy()
+
+    def __repr__(self):
+        return 'll={}, zs={}'.format(self.looplength(), self.zsteps())
+
+class DesertRoute(RouteLike):
+    def __init__(self, start, loop_start_step, loop_end_step, z_steps):
+        super().__init__(loop_end_step - loop_start_step + 1, z_steps)
+        self.loop_start_step = loop_start_step
+        self.start_place = start
+
+    def __repr__(self):
+        return 'sp={}, ls={}, le={}, len={}, z={}'.format(
+            self.start_place, self.loop_start_step,
+            self.loop_start_step + self.looplength() - 1, self.looplength(),
+            self.z_steps, )
+
+
+def trace_route(start, lr, desert_map):
+    loc = start
+    locs = {} # O(1) look-up
+    loop_idx = None
+    z_idxx = []
+    for ii, lrc in enumerate(itertools.cycle(lr)):
+        if PART==2:
+            if (loc, ii%len(lr)) in locs:
+                # If in the same location at the same point in the
+                # directions, then can only ever repeat what came before.
+                # The number of states is finite.
+                print('loop det')
+                loop_idx = ii
+                break
+        else:
+            if loc == 'ZZZ':
+                loop_idx = ii
+                break
+
+
+        if loc[-1] == 'Z':
+            z_idxx.append(ii)
+            print('z det @{}'.format(ii))
+
+        locs[(loc, ii % len(lr))] = ii
+        loc = desert_map.succ_node(lrc, loc)
+
+    loop_end_step = loop_idx-1
+    loop_start_step = locs[(loc, loop_idx % len(lr))] if PART==2 else 0
+    z_steps = z_idxx if PART==2 else [loop_end_step+1]
+
+    return DesertRoute(start, loop_start_step, loop_end_step, z_steps)
+
+class PuzzleInput:
+    def __init__(self, fname='sample-input{}'.format(PART)):
+        with open(fname, 'r') as f:
+            self.lines = f.readlines()
+        lr_match = RE_LR.match(self.lines[0])
+        self.lr = lr_match.group()
+        self.desert_map = DesertMap(self.lines)
+        self.starts = self.desert_map.get_starts()
+
+def trace_routes_from_input(pinput):
+    routes = []
+    for start in pinput.starts:
+        routes.append(trace_route(start, pinput.lr, pinput.desert_map))
+
+    return routes
+
+def find_coinciding_end_as_routelike(route_a, route_b):
+    pass
+
+if len(sys.argv)<2:
+    iput = PuzzleInput('input')
+else:
+    iput = PuzzleInput(sys.argv[1])
+
+print('starts=',iput.starts)
+routes = sorted(trace_routes_from_input(iput), key=lambda r: r.zsteps()[0])
+print('\n'.join(str(r) for r in routes))
+#rl = find_coinciding_end(*routes[:2])
+#rl = functools.reduce(find_coinciding_end_as_routelike, routes)
+#print(rl)
+
+if PART<2:
+    a = 1
+    for r in routes:
+        a *= r.looplength()
+
+    print(a)
+else:
+
+# It turns out, viewing the routes, that the z offset is always equal to the loop length.
+# The number of steps taken are the number to reach Z the first time, plus some number of loops:
+# C = z[r] + N[r] * l[r], for C the same for all r.
+# C = (N[r]+1) * l[r] because z[r]=l[r]
+
+# The numbers of steps must be divisible by each of the loop lengths for
+# the ghost to remain on the z location. (Of which there is only one
+# per starting location/ghost.)
+
+# Hence compute that quantity, i.e. the LCM.
+
+    print(math.lcm(*(r.looplength() for r in routes)))
