@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+import sys
+import itertools
+
+EXPANSION_FACT=10**6
+#EXPANSION_FACT=10**2
+#EXPANSION_FACT=2
+
+infilename = 'input'
+
+with open(infilename, 'r') as f:
+    lines = f.readlines()
+
+galaxies = []
+columns = []
+empty_row_cnt = 0
+
+for row, line in enumerate(lines):
+    row_empty = True
+    for col, char in enumerate(line):
+        if len(columns) <= col:
+            columns.append([])
+        if char == '#':
+            expanded_row = row + empty_row_cnt * (EXPANSION_FACT-1)
+            galaxies.append([col, expanded_row])
+            columns[col].append(galaxies[-1])
+            row_empty = False
+
+    if row_empty:
+        empty_row_cnt += 1
+
+empty_col_cnt = 0
+
+for col, col_galaxies in enumerate(columns):
+    for gal in col_galaxies:
+        expanded_col = col + empty_col_cnt * (EXPANSION_FACT-1)
+        gal[0] = expanded_col
+    if len(col_galaxies) == 0:
+        empty_col_cnt += 1
+
+f_dist = lambda a, b: abs(a[0]-b[0]) + abs(a[1] - b[1])
+
+acc = 0
+
+for ga, gb in itertools.combinations(galaxies, 2):
+    acc += f_dist(ga, gb)
+
+print(acc)
+
