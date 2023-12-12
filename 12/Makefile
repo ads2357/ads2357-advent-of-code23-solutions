@@ -1,4 +1,4 @@
-CFLAGS=-g -Wall -Wextra -Wpedantic
+CFLAGS=-g -Wall -Wextra -Wpedantic -std=gnu11
 
 all: solution
 

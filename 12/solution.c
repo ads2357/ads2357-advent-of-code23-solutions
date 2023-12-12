@@ -6,7 +6,9 @@
 #error "Need __int128__!"
 #endif
 
-void populate_masks(char *s, int *mask_broken, int *mask_mystery) {
+const int NUM_UNFOLD = 5;
+
+void populate_masks(char *s, __int128 *mask_broken, __int128 *mask_mystery) {
   size_t len = strlen(s); // don't care about iterating the string twice or crashing
 
   *mask_broken = 0;
@@ -20,14 +22,14 @@ void populate_masks(char *s, int *mask_broken, int *mask_mystery) {
   }
 }
 
-void init_mask(int *mask, int len, size_t offset) {
+void init_mask(__int128 *mask, __int128 len, size_t offset) {
   *mask = 0;
   while (len --> 0) { //whimsy
     *mask |= 1<<(len+offset);
   }
 }
 
-int check_mask_fits(int maskb, int maskm, int run_mask) {
+__int128 check_mask_fits(__int128 maskb, __int128 maskm, __int128 run_mask) {
   // To fit, all of run mask must be in maskb|maskm,
   // And all of maskb must be in run mask.
 
@@ -37,7 +39,7 @@ int check_mask_fits(int maskb, int maskm, int run_mask) {
           );
 }
 
-int check_mask_really_fits(int maskb, int maskm, int run_mask) {
+__int128 check_mask_really_fits(__int128 maskb, __int128 maskm, __int128 run_mask) {
   // To fit, all of run mask must be in maskb|maskm,
   // And all of maskb must be in run mask.
 
@@ -47,34 +49,34 @@ int check_mask_really_fits(int maskb, int maskm, int run_mask) {
           );
 }
 
-void print_mask_in_binary_reversed(int len, int mask) {
+void print_mask_in_binary_reversed(__int128 len, __int128 mask) {
   //while (len--) {
-  for (int ii=0; ii<len; ++ii) {
+  for (__int128 ii=0; ii<len; ++ii) {
     putchar(mask & (1<<ii) ? '1' : '0');
   }
 }
 
-int count_arrangements_r(size_t len, int maskb, int maskm, char *sruns, size_t offset, int *mask_runs) {
+__int128 count_arrangements_r(size_t len, __int128 maskb, __int128 maskm, char *sruns, size_t offset, __int128 *mask_runs) {
   if (sruns[0] == '\0') {
     if (!check_mask_really_fits(maskb, maskm, *mask_runs))
         return 0;
 
-    printf("succeeded with %x versus %x|%x=%x\n", *mask_runs, maskb, maskm, maskb|maskm);
+    //printf("succeeded with %x versus %x|%x=%x\n", *mask_runs, maskb, maskm, maskb|maskm);
     print_mask_in_binary_reversed(len, *mask_runs);
-    puts("");
+    //puts("");
     return 1;
   }
 
   //puts(sruns);
 
   int run_len;
-  int run_mask;
+  __int128 run_mask;
   int arrange_count = 0;
   int recurse_count = 0;
   int srun_num_chars = 0; // `,'
 
   sscanf(sruns, "%d", &run_len);
-  for (int n=1; n<1000; n=n*10) {
+  for (__int128 n=1; n<1000; n=n*10) {
     if (run_len / n)
       ++srun_num_chars; // ew
   }
@@ -86,7 +88,7 @@ int count_arrangements_r(size_t len, int maskb, int maskm, char *sruns, size_t o
 
   init_mask(&run_mask, run_len, offset);
 
-  for (int shift = 0; shift + offset + run_len-1 < len; ++shift) {
+  for (__int128 shift = 0; shift + offset + run_len-1 < len; ++shift) {
     // if proposed mask doesn't fit description, don't recurse further
     if (!check_mask_fits(maskb, maskm, run_mask << shift))
       continue;
@@ -105,7 +107,7 @@ int count_arrangements_r(size_t len, int maskb, int maskm, char *sruns, size_t o
 
   //puts("");
 
-  /* int total_mask = run_mask | *mask_runs; */
+  /* __int128 total_mask = run_mask | *mask_runs; */
 
   /* // 1) don't overlap with mask runs (what?) */
   /* // 2) wtf? */
@@ -119,8 +121,8 @@ int count_arrangements_r(size_t len, int maskb, int maskm, char *sruns, size_t o
   return arrange_count;
 }
 
-int count_arrangements(int len, int maskb, int maskm, char *sruns) {
-  int mask_runs = 0;
+__int128 count_arrangements(__int128 len, __int128 maskb, __int128 maskm, char *sruns) {
+  __int128 mask_runs = 0;
   return count_arrangements_r(len, maskb, maskm, sruns, 0, &mask_runs);
 }
 
@@ -129,30 +131,52 @@ int main(int argc, char **argv)
 {
   char gears_cbuf[512]; // danger!
   char runs_cbuf[512];
+  int part = 1;
 
-  int acc = 0;
+  __int128 acc = 0;
 
   if (argc < 2) {
     return 1;
   }
 
+  if (argc >2) {
+    part = 2;
+  }
+
   FILE *infile = fopen(argv[1], "r");
 
-  while (fscanf(infile, "%s %s\n", gears_cbuf, runs_cbuf) != EOF) {
-    /* puts(gears_cbuf); */
-    /* puts(runs_cbuf); */
 
-    int mask_broken;
-    int mask_mystery;
+  while (fscanf(infile, "%s %s\n", gears_cbuf, runs_cbuf) != EOF) {
+    __int128 mask_broken;
+    __int128 mask_mystery;
     int listlen;
 
     listlen = strlen(gears_cbuf);
+
+    if (part==2) {
+      for (int ii=0; ii<NUM_UNFOLD; ++ii) {
+        memcpy(runs_cbuf + ii * listlen, runs_cbuf, listlen);
+        //mask_broken |= (mask_broken << (listlen * ii));
+        //mask_mystery |= (mask_mystery << (listlen * ii));
+      }
+    }
+
+    listlen *= NUM_UNFOLD * (part-1);
+
     populate_masks(gears_cbuf, &mask_broken, &mask_mystery);
+
+    if (part==2) {
+      for (int ii=0; ii<NUM_UNFOLD; ++ii) {
+        //memcpy(runs_cbuf + ii * listlen, runs_cbuf, listlen);
+        mask_broken |= (mask_broken << (listlen * ii));
+        mask_mystery |= (mask_mystery << (listlen * ii));
+      }
+    }
 
     printf("broken = %x, mystery = %x, length=%d, runs=%s\n", mask_broken, mask_mystery, listlen, runs_cbuf);
 
 
-    int narrs = count_arrangements(listlen, mask_broken, mask_mystery, runs_cbuf);
+    __int128 narrs = count_arrangements(listlen, mask_broken, mask_mystery, runs_cbuf);
     printf("num arrs = %d\n------------\n", narrs);
     acc += narrs;
   }
