@@ -2,6 +2,9 @@
 #include <string.h>
 #include <assert.h>
 
+#ifndef __SIZEOF_INT128__
+#error "Need __int128__!"
+#endif
 
 void populate_masks(char *s, int *mask_broken, int *mask_mystery) {
   size_t len = strlen(s); // don't care about iterating the string twice or crashing
