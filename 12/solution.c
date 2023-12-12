@@ -156,7 +156,6 @@ int_fast64_t count_arrangements_r_memo(size_t len, __int128 maskb, __int128 mask
   assert(idx < sizeof(count_arrangements_r_memo_set)/sizeof(count_arrangements_r_memo_set[0]));
 
   if (!count_arrangements_r_memo_set[idx]) {
-    printf("miss: %lu, %lu\n", offset, lengths_off);
     count_arrangements_r_memo_set[idx] = 1;
     count_arrangements_r_memo_val[idx] = count_arrangements_r(
       len, maskb, maskm, offset, mask_runs, lengths, lengths_off, combined_len);
@@ -284,10 +283,12 @@ int main(int argc, char **argv)
 
     lengths[run_count] = 0;
 
-    fprintf(stdout, "Record:\n");
-    fprintf(stdout, "- list length : %d\n", listlen);
-    // dump reconstructed input to stderr to check parse.
-    print_records(stderr, listlen, mask_broken, mask_mystery, lengths, run_count);
+    if (g_verbose) {
+      fprintf(stdout, "Record:\n");
+      fprintf(stdout, "- list length : %d\n", listlen);
+      // dump reconstructed input to stderr to check parse.
+      print_records(stderr, listlen, mask_broken, mask_mystery, lengths, run_count);
+    }
 
     int_fast64_t narrs = 0;
     if (!getenv("REPRODUCE_INPUT_ONLY")) {
@@ -298,7 +299,9 @@ int main(int argc, char **argv)
 
     assert (narrs >= 0);
 
-    printf("num arrs = %lu\n------------\n", narrs);
+    if (g_verbose)
+      printf("num arrs = %lu\n------------\n", narrs);
+
     acc += narrs;
   }
 
