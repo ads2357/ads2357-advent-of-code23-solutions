@@ -12,10 +12,10 @@ INPUT?=sample-input
 all: solution
 
 run: solution
-	gdb -ex 'r' -ex 'print "hi"' --args ./solution $(INPUT)
+	gdb -ex 'r' --args ./solution $(INPUT)
 
 run2: solution
-	gdb -ex 'r' -ex 'print "hi"' --args ./solution $(INPUT) part=2
+	gdb -ex 'r' --args ./solution $(INPUT) part=2
 
 test: solution
 	./solution $(INPUT) | tail -n1 | grep $(ANS_P1)
