@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
 
 import sys
-import numpy as np
-
-DO_PRINT = 0
 
 ROCK_ROUNDED='O'
 ROCK_CUBIC='#'
+ROWLEN_LT = 500
 
-infilename = 'sample-input-tilted'
-infilename = 'sample-input'
-infilename = 'input'
+#DO_PRINT = False
+DO_PRINT = True
+
+if len(sys.argv) > 1:
+    infilename = sys.argv[1]
+else:
+    infilename = 'sample-input-tilted'
+    infilename = 'sample-input'
+    #infilename = 'input'
+
+print("in file: {}".format(infilename))
 
 # read in input
 lines = open(infilename, 'r').readlines()
 rounded_rocks_coords = [ [x, y]  for y, line in enumerate(lines) for x, char in enumerate(line) if char==ROCK_ROUNDED ]
 cubic_rocks_coords = [ [x, y]  for y, line in enumerate(lines) for x, char in enumerate(line) if char==ROCK_CUBIC ]
 num_lines = len(lines)
+max_y = num_lines-1
+max_x = len(lines[0])-1-1 # newline
 
-# tilt
-# use greedy algorithm
+print('size: {}x{}'.format(max_x+1, max_y+1))
 
 def hash_state():
-    ROWLEN_LT = 500
     retval = 0
     rrc = np.matrix(rounded_rocks_coords, dtype=int)
     #m = np.tile(np.matrix([[1, ROWLEN_LT]]), (len(rounded_rocks_coords),1))
@@ -35,39 +41,84 @@ def apply_delta(xy_list, dx, dy):
     xy_list[0] += dx
     xy_list[1] += dy
 
-def do_direction(dx, dy):
-    for coord in rounded_rocks_coords:
-        x, y = coord
-        #while y > 0 and lines[y-1][x] == '.':
-        # while (y > 0 and (x, y-1) not in (tuple(l) for l in rounded_rocks_coords)
-        #        and (x, y-1) not in (tuple(l) for l in cubic_rocks_coords)):
+# tilt
+# use greedy algorithm
 
-        l = [x, y]
-        while (y > 0 and l not in rounded_rocks_coords and l not in cubic_rocks_coords):
+def apply_delta(xy, dx, dy):
+    x, y = xy
+    return x+dx, y+dy
+
+def update_rock_coords(dx, dy):
+    most_x_or_y = None
+
+    #for rock_coord in rounded_rocks_coords[::-dx + -dy]:
+    for rock_coord in sorted(rounded_rocks_coords, key=lambda e: -e[0]*dx + -e[1]*dy):
+        x, y = rock_coord
+
+        if dx==1 and y==7:
+            #import pdb; pdb.set_trace()
+            pass
+        if (y != most_x_or_y and dy) or (x != most_x_or_y and dx):
+            most_x_or_y = y if dy else x
+            all_rocks = set(x+y*ROWLEN_LT for (x, y) in rounded_rocks_coords)
+            all_rocks |= set(x+y*ROWLEN_LT for (x, y) in cubic_rocks_coords)
+            assert len(all_rocks) == len(rounded_rocks_coords) + len(cubic_rocks_coords)
+
+        #while y > 0 and (x+dx+(y+dy)*ROWLEN_LT) not in all_rocks:
+        while 0 <= y+dy <= max_y and 0 <= x+dx <= max_x and (x+dx+(y+dy)*ROWLEN_LT) not in all_rocks:
+            #print('clear: {},{}',x+dx, y+dy)
             #y -= 1
-            #apply_delta(l, 0, -1)
-            l[1] -= 1
-        coord[0] = x
-        coord[1] = y
+            y += dy
+            x += dx
 
-visited_states_set = set()
-visited_states_list = list()
+        rock_coord[0] = x
+        rock_coord[1] = y
 
-state = hash_state()
-visited_states_set.add(state)
-visited_states_list.append(rounded_rocks_coords)
+NUM_CYCLES = 1000000000
+NUM_CYCLES = 10000
+NUM_TILTS = NUM_CYCLES*4
+#NUM_TILTS = 1
 
-do_direction(0,-1)
+CYC_DX = [0, -1, 0, 1]
+CYC_DY = [-1, 0, 1, 0]
 
-max_x = len(lines[0])-1
+global_states_set = set()
+global_states_list = []
 
-if DO_PRINT:
-    for yy in range(num_lines):
-        for xx in range(max_x):
+def print_state():
+    for yy in range(max_y+1):
+        for xx in range(max_x+1):
             print('#' if (xx, yy) in (tuple(l) for l in cubic_rocks_coords) else
                   'O' if (xx, yy) in (tuple(l) for l in rounded_rocks_coords) else
                   '.', end='')
         print('')
+
+
+for ii in range(NUM_TILTS):
+    cycle_part = ii % 4
+
+    state = (cycle_part, frozenset(x+y*ROWLEN_LT for (x, y) in rounded_rocks_coords))
+    if state in global_states_set:
+        print("Found loop!")
+        rpt_state = state
+        rpt_rocks = (cycle_part, rounded_rocks_coords.copy())
+        break
+    else:
+        print(len(global_states_set))
+
+    global_states_set.add(state)     # fast, unordered
+    global_states_list.append((cycle_part, rounded_rocks_coords.copy())) # slow, ordered
+
+    dy = CYC_DY[cycle_part]
+    dx = CYC_DX[cycle_part]
+    update_rock_coords(dx, dy)
+
+    if DO_PRINT:
+        print_state()
+
+for ii, rocklist in enumerate(global_states_list):
+    if rocklist == rpt_rocks:
+        print('started at {}'.format(ii))
 
 rrocks_coords_blorigin = [ (x, num_lines - y) for x, y in rounded_rocks_coords ]
 load = sum([ y for x, y in rrocks_coords_blorigin ])
