@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+
+import sys
+import itertools
+import functools
+
+#infilename = 'sample-input'
+infilename = 'input'
+infile = open(infilename, 'r')
+
+in_str = infile.read()
+
+in_patterns = in_str.split('\n\n')
+
+def pat_str_to_int(s):
+    '''Returns pattern string converted to binary int.'''
+    return (#int(
+        ''.join(
+            '1' if c == '#' else '0'
+            for c in s
+            if c in '#.'
+        )
+    )#)
+
+def dist(sa, sb):
+    '''Distance measure for correcting smudges.'''
+    return len([None for ca, cb in zip(sa, sb) if ca!=cb])
+
+def check_mirror(row_or_col_list, repeat_index_lo):
+    '''Return true if the index is a line of reflective symmetry on the list, else false.'''
+    upfromidx = row_or_col_list[repeat_index_lo+1:]
+    downfromidx = row_or_col_list[repeat_index_lo::-1]
+    return all(u==d for u,d in zip(upfromidx, downfromidx))
+
+def pat_to_rows_cols(pat):
+    '''Convert an input pattern (grid of characters) into rows and columns (a pair of lists).'''
+    rows = []
+    lines = pat.split('\n')
+    for line in lines:
+        if not line:
+            continue
+        rows.append(
+            pat_str_to_int(line)
+        )
+
+    cols = []
+    repeat_idx_cols = []
+    for ii in range(len(lines[0])):
+        str_col = [ li[ii] for li in lines if len(li) > ii]
+        if not str_col:
+            continue
+        cols.append(pat_str_to_int(str_col))
+
+    return rows, cols
+
+def find_repeats_as_indices(strings):
+    '''For a list of strings, return indices of those that are followed by the same string again.'''
+    rv = []
+    for ii in range(len(strings)-1):
+        if strings[ii] == strings[ii+1]:
+            rv.append(ii)
+    return rv
+
+def find_solution1():
+    '''Solve part 1.'''
+    row_numbers = []
+    col_numbers = []
+
+    for pat in in_patterns:
+        rows, cols = pat_to_rows_cols(pat)
+
+        rpt_idxx_rows = find_repeats_as_indices(rows)
+        rpt_idxx_cols = find_repeats_as_indices(cols)
+
+        for rptidx in rpt_idxx_rows:
+            if check_mirror(rows, rptidx):
+                row_numbers.append(rptidx+1)
+
+        for rptidx in rpt_idxx_cols:
+            if check_mirror(cols, rptidx):
+                col_numbers.append(rptidx+1)
+            
+    return sum(row_numbers) * 100 + sum(col_numbers)
+
+def flip(character):
+    '''Smudge, or un-smudge, the character.'''
+    if character in '1':
+        return '0'
+    return '1'
+
+def find_mirror(rows):
+    '''Return indices in the row list (or col list) about which mirror symmetries exist.'''
+
+    # identify candidates by looking for pairs
+    rpt_idxx = find_repeats_as_indices(rows)
+
+    rv = []
+
+    for rptidx in rpt_idxx:
+        if check_mirror(rows, rptidx):
+            rv.append(rptidx+1)
+
+    return rv
+
+def find_mirrors_smudge(rows):
+    '''Find symmetries created by correcting one smudge in the set of rows (or cols).'''
+
+    # A symmetry can only be created when a row gains a doppelganger as a result of un-smudging.
+    # Create candidate solutions by selecting pairs of such rows.
+    row_pairs = list(itertools.combinations(range(len(rows)), 2))
+    row_pairs_dist1 = list(filter(lambda ia_ib: dist(rows[ia_ib[0]], rows[ia_ib[1]])==1, row_pairs))
+    mirrors = []
+
+    for idxa, idxb in row_pairs_dist1:
+        rowcpy = rows.copy()
+        chr_idx = next(ii for ii, (ca, cb) in enumerate(zip(rows[idxa], rows[idxb])) if ca!=cb)
+        rowcpy[idxa] = ''.join([cc if ii!=chr_idx else flip(cc) for ii, cc in enumerate(rows[idxa])])
+
+        mirrors.extend(find_mirror(rowcpy))
+
+        rowcpy[idxa] = ''.join([cc if ii!=chr_idx else flip(cc) for ii, cc in enumerate(rows[idxa])])
+        rowcpy[idxb] = ''.join([cc if ii!=chr_idx else flip(cc) for ii, cc in enumerate(rows[idxb])])
+
+        mirrors.extend(find_mirror(rowcpy))
+
+    return set(mirrors)
+
+def find_solution2():
+    '''Solve part 2.'''
+    row_numbers = []
+    col_numbers = []
+
+    for pat in in_patterns:
+        rows, cols = pat_to_rows_cols(pat)
+
+        orig_idx_rows = find_mirror(rows)
+        orig_idx_cols = find_mirror(cols)
+
+        assert len(orig_idx_cols + orig_idx_rows) == 1
+
+        row_mirrors = list(find_mirrors_smudge(rows) - set(orig_idx_rows))
+        col_mirrors = list(find_mirrors_smudge(cols) - set(orig_idx_cols))
+
+        assert len(row_mirrors + col_mirrors) == 1
+
+        row_numbers.extend(row_mirrors)
+        col_numbers.extend(col_mirrors)
+
+    return sum(row_numbers) * 100 + sum(col_numbers)
+
+print(find_solution1())
+print(find_solution2())
+
