@@ -75,7 +75,7 @@ def update_rock_coords(dx, dy):
         rock_coord[1] = y
 
 NUM_CYCLES = 1000000000
-#NUM_CYCLES = 10000
+NUM_CYCLES = 10000
 NUM_TILTS = NUM_CYCLES*4
 #NUM_TILTS = 1
 
@@ -85,11 +85,11 @@ CYC_DY = [-1, 0, 1, 0]
 global_states_set = set()
 global_states_list = []
 
-def print_state(rounded, cubic):
+def print_state():
     for yy in range(max_y+1):
         for xx in range(max_x+1):
-            print('#' if (xx, yy) in (tuple(l) for l in cubic) else
-                  'O' if (xx, yy) in (tuple(l) for l in rounded) else
+            print('#' if (xx, yy) in (tuple(l) for l in cubic_rocks_coords) else
+                  'O' if (xx, yy) in (tuple(l) for l in rounded_rocks_coords) else
                   '.', end='')
         print('')
 
@@ -102,47 +102,25 @@ for ii in range(NUM_TILTS):
         print("Found loop!")
         rpt_state = state
         rpt_rocks = (cycle_part, rounded_rocks_coords.copy())
-        looped_idx = ii
         break
     else:
         print(len(global_states_set))
 
-    print('ii={}, hash={}, cyc={}, rock_hash={}'.format( ii, hash(state), cycle_part, hash(state[1])))
-
-    global_states_set.add(state)     # O(1) search, unordered
-    global_states_list.append((cycle_part, rounded_rocks_coords.copy())) # O(n) search, indexable
+    global_states_set.add(state)     # fast, unordered
+    global_states_list.append((cycle_part, rounded_rocks_coords.copy())) # slow, ordered
 
     dy = CYC_DY[cycle_part]
     dx = CYC_DX[cycle_part]
     update_rock_coords(dx, dy)
 
     if DO_PRINT:
-        print_state(rounded_rocks_coords, cubic_rocks_coords)
+        print_state()
 
 for ii, rocklist in enumerate(global_states_list):
     if rocklist == rpt_rocks:
         print('started at {}'.format(ii))
-        # TODO: why multiple 'started at'???
-        started_idx = ii
-        break
 
-loop_len = looped_idx - started_idx
-
-end_idx = (NUM_CYCLES - started_idx) % loop_len
-
-
-end_cpart, end_rocks = global_states_list[end_idx]
-
-print_state(end_rocks, cubic_rocks_coords)
-print('end_cpart={}'.format(end_cpart))
-assert end_idx % 4 == 0 # one complete spin cycle
-
-rrocks_coords_blorigin = [ (x, num_lines - y) for x, y in end_rocks ]
+rrocks_coords_blorigin = [ (x, num_lines - y) for x, y in rounded_rocks_coords ]
 load = sum([ y for x, y in rrocks_coords_blorigin ])
 print(load)
-
-
-# rrocks_coords_blorigin = [ (x, num_lines - y) for x, y in rounded_rocks_coords ]
-# load = sum([ y for x, y in rrocks_coords_blorigin ])
-# print(load)
 
