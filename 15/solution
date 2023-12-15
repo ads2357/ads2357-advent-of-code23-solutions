@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+#infilename = 'sample-input'
+infilename = 'input'
+
+with open(infilename, 'r') as f:
+    lines = f.readlines()
+
+steps = ''.join([ line.strip() for line in lines ]).split(',')
+
+def hash(step):
+    cv = 0
+    for c in step:
+        cv += ord(c)
+        cv *= 17
+        cv %= 256
+    return cv
+
+acc = 0
+for step in steps:
+    acc += hash(step)
+
+print(acc)
+
+boxes = []
+for ii in range(256):
+    boxes.append([].copy())
+
+def insert_into_box(boxidx, label, flen):
+    for lensidx in range(len(boxes[boxidx])):
+        lens = boxes[boxidx][lensidx]
+        if lens[0] == label:
+            boxes[boxidx][lensidx] = (label, flen)
+            break
+    else:
+        boxes[boxidx].append((label, flen))
+
+def remove_from_box(boxidx, label):
+    boxes[boxidx] = [ lens for lens in boxes[boxidx] if lens[0] != label ]
+
+for step in steps:
+    boxidx = hash(step.split('=')[0].strip('-'))
+    if '=' in step:
+        label, flen = step.split('=')
+        insert_into_box(boxidx, label, int(flen))
+    else:
+        label = step[:-1]
+        remove_from_box(boxidx, label)
+
+def compute_focussing_pow(box_list):
+    acc = 0
+
+    for boxn_p1, box in enumerate(box_list, 1):
+        for slotn, lens in enumerate(box, 1):
+            lab, flen = lens
+            power = boxn_p1 * slotn * flen
+            acc += power
+
+    return acc
+
+#print (boxes)
+print(compute_focussing_pow(boxes))
