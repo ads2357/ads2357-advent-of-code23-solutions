@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import sys
+
+infilename = 'sample-input'
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+with open(infilename, 'r') as infile:
+    lines = infile.readlines()
+
+beam_positions = np.matrix([[0],[0]], dtype=int)
+beam_directions = np.matrix([[1],[0]], dtype=int)
+
+grid_devices = {}
+
+WESTLEAN_MIRROR = [np.matrix([[0,1],
+                              [1,0]], dtype=int)]
+
+EASTLEAN_MIRROR = [np.matrix([[0,-1],
+                              [-1,0]], dtype=int)]
+
+NS_SPLITTER     = [np.matrix([[0,1],
+                              [1,1]], dtype=int),
+
+                   np.matrix([[0,-1],
+                              [1,1]], dtype=int)]
+
+WE_SPLITTER     = [np.matrix([[1,1],
+                              [0,1]], dtype=int),
+
+                   np.matrix([[1,1],
+                              [0,-1]], dtype=int)
+                   ]
+CHAR_TO_DEVICE = {
+    '/' : EASTLEAN_MIRROR,
+    '\\' : WESTLEAN_MIRROR,
+    '|' : NS_SPLITTER,
+    '-' : WE_SPLITTER,
+}
+
+
+size_x = 0
+size_y = 0
+for yy, line in enumerate(lines):
+    for xx, char in enumerate(line):
+        if char in CHAR_TO_DEVICE:
+            grid_devices[(xx, yy)] = CHAR_TO_DEVICE[char]
+        size_x = xx
+    size_y = yy
+xx += 1
+yy += 1
+
+states = set()
+it = 0
+
+energised = np.zeros((size_x, size_y), dtype=bool)
+
+M_2VEC_ADD_DIMS = np.matrix([1,1], dtype=int)
+
+def print_grid(bpositions):
+    for yy in range(size_y):
+        for xx in range(size_x):
+            if ((bpositions == np.matrix([[xx],[yy]])).prod(axis=0)).any():
+                print(bcolors.OKCYAN, end='')
+            print(lines[yy][xx], end='')
+            print(bcolors.ENDC, end='')
+        print()
+
+while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in states:
+    print_grid(beam_positions)
+
+    #import pdb; pdb.set_trace()
+    assert all(s == 1 for s in (M_2VEC_ADD_DIMS * beam_directions).flat)
+
+    states.add((frozenset(beam_positions.flat), frozenset(beam_directions.flat)))
+    # for beam directions, where beam position==grid device key, apply operations, removing old and appending new
+
+    # apply operations
+    for (x,y), devlist in grid_devices.items():
+        #import pdb; pdb.set_trace()
+        #beams_here = (beam_positions==np.matrix([[x],[y]])).sum(axis=0).repeat(2, axis=0)
+        beams_here = beam_positions==np.matrix([[x],[y]])
+        beams_here[0,:] &= beams_here[1,:]
+        beams_here[1,:] = beams_here[0,:]
+        if beams_here.any():
+            if len(devlist)>1:
+                new_beam_directions = devlist[1] * beam_directions[beams_here].T.copy()
+                new_beam_positions = beam_positions[beams_here].T.copy()
+            else:
+                new_beam_directions = np.matrix(';', dtype=int)
+                new_beam_positions = np.matrix(';', dtype=int)
+
+            #bdt = beam_directions[beams_here].T
+            #bdt[:] = devlist[0] * beam_directions[beams_here].T
+
+            #bdt = devlist[0] * beam_directions[beams_here].T
+
+            beam_directions_nsel = beam_directions & ~beams_here
+            beam_directions_sel  = beam_directions &  beams_here
+
+            beam_directions_sel = devlist[0] * beam_directions_sel
+
+            import pdb; pdb.set_trace()
+            beam_directions = beam_directions_sel + beam_directions_nsel
+
+
+            #beam_directions.append(new_beam_directions)
+            #beam_positions.append(new_beam_positions)
+            beam_directions = np.append(beam_directions, new_beam_directions, axis=1)
+            beam_positions = np.append(beam_positions, new_beam_positions, axis=1)
+
+    # move beam fronts
+    beam_positions += beam_directions
+
+    oob_hi = beam_positions >= np.matrix([[size_x], [size_y]])
+    oob_lo = beam_positions < np.matrix([[0], [0]])
+
+    hi0 = oob_hi[0,:]
+    hi1 = oob_hi[1,:]
+    oob_hi_rly = hi0 | hi1
+
+    lo0 = oob_lo[0,:]
+    lo1 = oob_lo[1,:]
+    oob_lo_rly = lo0 | lo1
+
+    oob = oob_hi_rly | oob_lo_rly
+
+    beam_positions = np.delete(beam_positions, oob.flat, axis=1)
+    beam_directions = np.delete(beam_directions, oob.flat, axis=1)
+
+    #import pdb;
+    #pdb.set_trace()
+
+    energised[ beam_positions[0, :], beam_positions[1, :] ] = 1
+
+    print('iteration {}'.format(it))
+    it += 1
+
+print(energised)

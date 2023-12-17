@@ -1,0 +1,55 @@
+square grid
+
+empty space (.), mirrors (/ and \), and splitters (| and -).
+
+each tile converts some heat
+
+beam enters in the top-left corner from the left and heading to the right
+
+/ reflect eastbound to northbound
+
+\ reflect eastbound to southbound
+
+[ in general: horizontal->clockwise; vertical->anticlockwise for / and vice versa for \ ]
+
+splitters: ignore if parallel, else cast two beams at right angles to original
+
+how many tiles energised?
+
+
+
+
+fun idea: beams as complex numbers, with magnitude and direction
+
+e.g. 00: 1 (start)
+10: 1 (cast from 00)
+
+problem: beams will interfere destructively
+
+this is silly
+
+
+
+how about ongoing beams as a vec of complex numbers, leaving behind magnitudes
+
+this is likely computationally wasteful, but easy (for me) to reason about.
+
+wcgw
+yolo (the irony)
+
+
+
+design:
+
+beams (complex vec)
+
+beam coords (complex vec)
+
+components: beam -> beam [, beam] only if beam is at components location
+-- just compare component coords with beam coords en masse
+-- each component: a 
+
+
+need a way of relating coord values to indices
+
+- for tiles' energy levels: 
