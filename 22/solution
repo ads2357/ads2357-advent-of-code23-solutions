@@ -1,0 +1,183 @@
+import sys
+import re
+import collections
+import networkx as nx
+
+
+## WIP::::
+##### Working for sample input.
+##### Answer too high for actual input.
+##### Printed diagrams look OK. IDK what's wrong.
+
+infilename = 'input'
+#infilename = 'sample-input'
+
+if len(sys.argv) > 1:
+    infilename = sys.argv[1]
+
+infile = open(infilename, 'r')
+
+lines = infile.readlines()
+
+RE_BRICK = re.compile(r'(?P<x1>\d+),(?P<y1>\d+),(?P<z1>\d+)~(?P<x2>\d+),(?P<y2>\d+),(?P<z2>\d+)')
+
+#Brick = collections.namedtuple('Brick', 'zmin zmax ymin ymax xmin xmax id')
+class Brick:
+    def __init__(self, zmin, zmax, ymin, ymax, xmin, xmax, idnum):
+        self.zmin = zmin
+        self.zmax = zmax
+        self.ymin = ymin
+        self.ymax = ymax
+        self.xmin = xmin
+        self.xmax = xmax
+        self.idnum = idnum
+
+    def __lt__(self, other):
+        return self.zmin < other.zmin
+        
+    def __repr__(self):
+        return '{},{},{},{},{},{},#{}'.format(
+            self.zmin,
+            self.zmax,
+            self.ymin,
+            self.ymax,
+            self.xmin,
+            self.xmax,
+            self.idnum
+        )            
+
+brick_list = []
+
+minx =0
+miny =0
+maxx =0
+maxy =0
+minz =0
+maxz =0
+
+for idnum, line in enumerate(lines):
+    m = RE_BRICK.match(line)
+    if not m:
+        continue
+
+    coords = [ sorted([int(c1), int(c2)]) for c1, c2 in [ [m['x1'], m['x2']],
+                                                          [m['y1'], m['y2']],
+                                                          [m['z1'], m['z2']],
+    ]]
+
+    b = Brick(coords[2][0], coords[2][1],
+              coords[1][0], coords[1][1],
+              coords[0][0], coords[0][1], idnum)
+
+    if b.xmin < minx:
+        minx = b.xmin
+    if b.ymin < miny:
+        miny = b.ymin
+    if b.zmin < minz:
+        minz = b.zmin
+    if b.xmax > maxx:
+        maxx = b.xmax
+    if b.ymax > maxy:
+        maxy = b.ymax
+    if b.zmax > maxz:
+        maxz = b.zmax
+
+    brick_list.append(b)
+
+brick_list.sort()
+
+brickgraph = nx.DiGraph()
+
+# iterating square by square. Might not perform for large grids,
+# including grids of large bricks, but don't optimise prematurely
+
+elevmap = []
+brickmap = []
+
+for yy in range(miny, maxy+1):
+    elevmap.append([].copy())
+    brickmap.append([].copy())
+    for xx in range(minx, maxx+1):
+        elevmap[-1].append(0)
+        brickmap[-1].append(None)
+
+def pelev():
+    for yy in elevmap:
+        print(yy)
+
+def pblocks():
+    bricks = sorted(brick_list)
+    for z in range(maxz, 0-1, -1):
+        for x in range(maxx+1):
+            for b in bricks:
+                if (b.xmin <= x <= b.xmax) and b.zmin <= z <= b.zmax:
+                    print(b.idnum, end='')
+                    break
+            else:
+                print('.', end='')
+        print()
+    print()
+
+    for z in range(maxz, 0-1, -1):
+        for y in range(maxy+1):
+            for b in bricks:
+                if (b.ymin <= y <= b.ymax) and b.zmin <= z <= b.zmax:
+                    print(b.idnum, end='')
+                    break
+            else:
+                print('.', end='')
+        print()
+    print()
+
+
+# sequencing lemma thingy:
+# # if bricks exist on the same level, then cannot overlap
+# # if bricks exist on any of the same levels, drop order cannot matter.
+# # drop order can then be by z min.
+
+for b in brick_list:
+    rangex = range(b.xmin, b.xmax+1)
+    rangey = range(b.ymin, b.ymax+1)
+
+    heights_below = [ elevmap[y][x] for x in rangex for y in rangey ]
+    maxh_below = max(heights_below)
+
+    drop = b.zmin - maxh_below - 1
+    assert drop >= 0
+    b.zmin -= drop
+    b.zmax -= drop # harmful?
+
+    brickgraph.add_node(b.idnum, brick=b)
+
+    for y in rangey:
+        for x in rangex:
+
+            if brickmap[y][x] is None:
+                pass
+            else:
+                assert elevmap[y][x] < b.zmin
+                brickgraph.add_edge(brickmap[y][x].idnum, b.idnum) # previous block supports this block
+
+            elevmap[y][x] = b.zmax
+            brickmap[y][x] = b
+
+# bricks may be disintegrated if they are the only reason other bricks are supported.
+# a brick supports another brick if there is an edge from the brick to the other brick.
+# a brick exclusively supports another brick if the brick it supports has no other incoming edges
+
+disintegrateable  = []
+
+for bid, b in brickgraph.nodes.items():
+    print (bid, b)
+
+    is_needed = False
+
+    for sid, s in brickgraph.succ[bid].items():
+        supported_by = brickgraph.pred[sid]
+        if len(supported_by) == 1:
+            is_needed = True
+
+    if not is_needed:
+        disintegrateable.append(bid)
+
+print(len(disintegrateable))
