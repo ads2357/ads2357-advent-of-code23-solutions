@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 import re
 import collections
@@ -156,7 +158,8 @@ for b in brick_list:
                 pass
             else:
                 assert elevmap[y][x] < b.zmin
-                brickgraph.add_edge(brickmap[y][x].idnum, b.idnum) # previous block supports this block
+                if b.zmin == elevmap[y][x] + 1:
+                    brickgraph.add_edge(brickmap[y][x].idnum, b.idnum) # previous block supports this block
 
             elevmap[y][x] = b.zmax
             brickmap[y][x] = b
