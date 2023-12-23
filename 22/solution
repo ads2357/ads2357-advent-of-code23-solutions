@@ -4,15 +4,15 @@ import sys
 import re
 import collections
 import networkx as nx
-
+import functools
 
 ## WIP::::
 ##### Working for sample input.
 ##### Answer too high for actual input.
 ##### Printed diagrams look OK. IDK what's wrong.
 
-infilename = 'input'
-#infilename = 'sample-input'
+#infilename = 'input'
+infilename = 'sample-input'
 
 if len(sys.argv) > 1:
     infilename = sys.argv[1]
@@ -170,6 +170,7 @@ for b in brick_list:
 
 disintegrateable  = []
 
+# Part 1: count bricks that can be disintegrated without a collapse.
 for bid, b in brickgraph.nodes.items():
     print (bid, b)
 
@@ -184,3 +185,59 @@ for bid, b in brickgraph.nodes.items():
         disintegrateable.append(bid)
 
 print(len(disintegrateable))
+
+# Part 2: How many bricks will fall, if each brick is removed.
+
+
+### VVV won't work, could take out multiple supporting bricks.
+# If brick is removed, then all supported bricks with in degree 1 will fall, as will their successors with in degree 1, etc..
+def search_neighbours_collapsible(bid):
+    count = 0
+
+    for sid, s in brickgraph.succ[bid].items():
+        will_collapse = False
+        supported_by = brickgraph.pred[sid]
+        if len(supported_by) == 1:
+            will_collapse = True
+    
+        if will_collapse:
+            count += 1 + search_neighbours_collapsible(sid)
+
+    return count
+
+
+def get_descendents(bid, graph, stop):
+    rv = [bid]
+    if bid == stop:
+        return rv
+    for sid, s in graph.succ[bid].items():
+        rv.append(sid)
+        rv.extend(get_descendents(sid, graph, stop))
+    return rv
+
+hparg_kcirb = brickgraph.reverse(False)
+
+# Instead, compare tree forwards from supporting node to tree backwards 
+def find_gt_collapsible(bid):
+
+    #sub_bg = brickgraph.subgraph(bid)
+    sub_bg = brickgraph.subgraph(get_descendents(bid, brickgraph, -1))
+
+    count = 0
+
+    for node_id in sub_bg:
+        #rev = hparg_kcirb.subgraph(node_id)
+        rev = hparg_kcirb.subgraph(get_descendents(node_id, hparg_kcirb, bid))
+        if all(n in sub_bg for n in rev):
+            count += 1 # all ultimately supported by the subgraph
+
+    return count-1 # don't count self
+
+acc = 0
+for bid, b in brickgraph.nodes.items():
+    #num_collapse = search_neighbours_collapsible(bid)
+    num_collapse = find_gt_collapsible(bid)
+    print(b, num_collapse)
+    acc += num_collapse
+
+print(acc)
