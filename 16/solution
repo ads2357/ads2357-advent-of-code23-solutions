@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import functools
+import itertools
 import collections
 import numpy as np
 import sys
@@ -29,9 +31,6 @@ class bcolors:
 with open(infilename, 'r') as infile:
     lines = infile.readlines()
 
-beam_positions = np.matrix([[0],[0]], dtype=int)
-beam_directions = np.matrix([[1],[0]], dtype=int)
-
 grid_devices = collections.defaultdict(list)
 
 WESTLEAN_MIRROR = [np.matrix([[0,1],
@@ -52,220 +51,137 @@ WE_SPLITTER     = [np.matrix([[1,1],
                    np.matrix([[1,-1],
                               [0,0]], dtype=int)
                    ]
+
+EMPTY = [ np.matrix([[1,0],[0,1]], dtype=int) ]
+
 CHAR_TO_DEVICE = {
     '/' : EASTLEAN_MIRROR,
     '\\' : WESTLEAN_MIRROR,
     '|' : NS_SPLITTER,
     '-' : WE_SPLITTER,
+    '.' : EMPTY,
 }
 
-
+# Make grid devices map from input
 size_x = 0
 size_y = 0
 for yy, line in enumerate(lines):
     if not line.strip():
         continue
     for xx, char in enumerate(line.strip()):
-        if char in CHAR_TO_DEVICE:
-            grid_devices[(xx, yy)] = CHAR_TO_DEVICE[char]
+        #if char in CHAR_TO_DEVICE:
+            #grid_devices[(xx, yy)] = CHAR_TO_DEVICE[char]
+        grid_devices[xx, yy] = CHAR_TO_DEVICE[char]
         size_x = xx
     size_y = yy
 size_x += 1
 size_y += 1
 print('size:', size_x, size_y)
 
-states = set()
-it = 0
-
-#energised = np.zeros((size_x, size_y), dtype=bool)
-energised = set([(0,0)])
-
-M_2VEC_ADD_DIMS = np.matrix([1,1], dtype=int)
-
-def print_grid(bpositions):
+def print_grid(states):
     for yy in range(size_y):
         for xx in range(size_x):
-            if ((bpositions == np.matrix([[xx],[yy]])).prod(axis=0)).any():
+            if any(p == (xx,yy) for p, _ in states):
                 print(bcolors.BGCYAN, end='')
-            #print(lines[yy][xx], end='')
             print(yy, end='')
             print(bcolors.ENDC, end='')
         print()
 
 def print_energised(en):
+    printed = []
+
     for yy in range(size_y):
         for xx in range(size_x):
             if (xx, yy) in en:
                 print(bcolors.BGGREEN, end='')
+                printed.append((xx,yy))
             print(lines[yy][xx], end='')
             print(bcolors.ENDC, end='')
         print()
+    print (len(printed))
+    print (len(en))
+    print (printed)
+    print (set(en) - set(printed))
+    print()
 
-## TODO: track individual beam loops
+def is_in_bounds(pos):
+    return (0 <= pos[0] < size_x
+            and 0 <= pos[1] < size_y)
 
-dev_loc_matrix = np.matrix([[x,y] for x, y in grid_devices.keys()]).T.T
-dev_loc_matrix_x = dev_loc_matrix[:,0]
-dev_loc_matrix_y = dev_loc_matrix[:,1]
+sys.setrecursionlimit(12210)
 
-#while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in states:
-for ii in range(1000):
-    #print_grid(beam_positions)
+@functools.cache
+def trace_beam(pos, direction):
+    """Traces a single beam until it hits something, returns state and new
+    beams (if any)."""
 
-    #import pdb; pdb.set_trace()
-    assert all(abs(s) == 1 for s in (M_2VEC_ADD_DIMS * beam_directions).flat)
+    cov = set()
 
-    states.add((frozenset(beam_positions.flat), frozenset(beam_directions.flat)))
-    # for beam directions, where beam position==grid device key, apply operations, removing old and appending new
+    mpos = np.matrix(pos).T
+    mdir = np.matrix(direction).T
 
-    # apply operations
+    if is_in_bounds(pos):
+        cov.add(pos)
 
-    ## TODO: All the time is spent checking to see if x y has any beams (normally not)
-    # # Better to use sorting and hashing
-    # # Note it also slows down once there are a lot of beams.
-    # for (x,y), devlist in grid_devices.items():
-    #     #import pdb; pdb.set_trace()
-    #     #beams_here = (beam_positions==np.matrix([[x],[y]])).sum(axis=0).repeat(2, axis=0)
-    #     beams_here = beam_positions==np.matrix([[x],[y]])
-    #     beams_here[0,:] &= beams_here[1,:]
-    #     beams_here[1,:] = beams_here[0,:]
-    #     if beams_here.any():
+    vec2tup = lambda sd: tuple(sd.T.tolist()[0]) # unwrap since single column matrix (ew)
 
+    succ_dir = [ devmat * mdir for devmat in grid_devices[pos] ]
+    while len(succ_dir) == 1:
+        mpos += succ_dir[0]
+        pos = vec2tup(mpos)
 
-    # beams_x = beam_positions[0,:]
-    # beams_y = beam_positions[1,:]
+        if not is_in_bounds(pos):
+            return cov, set()
 
-    # intercepts_x = beams_x == dev_loc_matrix_x
-    # intercepts_y = beams_y == dev_loc_matrix_y
+        cov.add(pos)
+        mdir = succ_dir[0]
+        succ_dir = [ devmat * mdir for devmat in grid_devices[pos] ]
 
-    # intercepts = intercepts_x & intercepts_y
+    return cov, { (vec2tup(mpos + sd), vec2tup(sd)) for sd in succ_dir }
 
-    # assert intercepts.shape[1] == beam_positions.shape[1]
+def do_thing(pos, direction):
+    outstanding_beams = {(pos, direction)}
+    beams_done_already = set()
+    covered_coords = set()
 
+    while outstanding_beams:
+        new_outstanding_beams = set()
+        for bpos, bdir in outstanding_beams:
+            bcov, newb = trace_beam(bpos, bdir)
+            covered_coords |= bcov
+            new_outstanding_beams |= newb
 
-    # while True:
+        beams_done_already |= outstanding_beams
 
+        outstanding_beams = new_outstanding_beams - beams_done_already
 
-    new_beam_positions = []
-    new_beam_directions = []
+    return covered_coords
 
-    for bidx in range(beam_positions.shape[1]):
-        x, y = [d.sum() for d in beam_positions[:,bidx]]
-        devlist = grid_devices[x,y]
+covered = do_thing((0,0), (1,0))
+print_energised(covered)
+print(len(covered))
 
-        if devlist:
-            if len(devlist) > 1:
-                for dev in devlist[1:]:
-                    new_beam_directions.append(dev * beam_directions[:,bidx])
-                    new_beam_positions.append(beam_positions[:,bidx])
+ncovered = []
 
-            beam_directions[:, bidx] = devlist[0] * beam_directions[:, bidx]
+for xx in range(size_x):
+    start = (xx, 0)
+    direc = (0, 1)
+    ncovered.append(len(do_thing(start, direc)))
 
-    for bd in new_beam_directions:
-        beam_directions = np.concatenate([beam_directions, bd], axis=1)
-    for bp in new_beam_positions:
-        beam_positions = np.concatenate([beam_positions, bp], axis=1)
+for xx in range(size_x):
+    start = (xx, size_y-1)
+    direc = (0, -1)
+    ncovered.append(len(do_thing(start, direc)))
 
-            # old_beam_directions = [] # lost patience with numpy today
-            # old_beam_positions  = []
-            # nrow, ncol = beam_directions.shape
-            # assert nrow == 2
-            # for col in range(ncol):
-            #     old_beam_directions.append(beam_directions[:, col])
-            #     old_beam_positions.append(beam_positions[:,col])
+for yy in range(size_y):
+    start = (0, yy)
+    direc = (1,0)
+    ncovered.append(len(do_thing(start, direc)))
 
-            # new_beam_directions  = []
-            # new_beam_positions  = []
-            # for ii, (obp, obd) in enumerate(zip(old_beam_positions, old_beam_directions)):
-            #     if x == obp[0] and y == obp[1]:
-            #         for dev in devlist:
-            #             new_beam_directions.append(dev * obd)
-            #             new_beam_positions.append(beam_positions[:, ii].copy())
-            #     else:
-            #         new_beam_directions.append(obd)
-            #         new_beam_positions.append(beam_positions[:, ii].copy())
+for yy in range(size_y):
+    start = (size_x-1, yy)
+    direc = (-1,0)
+    ncovered.append(len(do_thing(start, direc)))
 
-            # # V Wrong, doesn't account for location.
-            # # assert len(new_beam_directions) == (len(old_beam_directions)
-            # #                                     + (1 if len(devlist) == 2 and else 0))
-            # assert len(new_beam_directions) == len(new_beam_positions)
-
-            # beam_directions = np.matrix(';', dtype=int)
-            # beam_positions = np.matrix(';', dtype=int)
-            # for bd in new_beam_directions:
-            #     beam_directions = np.concatenate([beam_directions, bd], axis=1)
-
-            # for bp in new_beam_positions:
-            #     beam_positions = np.concatenate([beam_positions, bp], axis=1)
-            #     #np.append(beam_positions, bp, axis=1)
-
-            # assert beam_positions.shape == beam_directions.shape
-
-            # #if len(devlist)>1:
-            #     #new_beam_directions = devlist[1] * beam_directions[beams_here].T.copy()
-            #     #new_beam_positions = beam_positions[beams_here].T.copy()
-            # #else:
-            #     #new_beam_directions = np.matrix(';', dtype=int)
-            #     #new_beam_positions = np.matrix(';', dtype=int)
-
-            # #bdt = beam_directions[beams_here].T
-            # #bdt[:] = devlist[0] * beam_directions[beams_here].T
-
-            # #bdt = devlist[0] * beam_directions[beams_here].T
-
-            # #beam_directions_nsel = beam_directions & ~beams_here
-            # #beam_directions_sel  = beam_directions &  beams_here
-
-            # #beam_directions_sel = devlist[0] * beam_directions_sel
-
-            # #import pdb; pdb.set_trace()
-            # #beam_directions = beam_directions_sel + beam_directions_nsel
-
-
-            # #beam_directions.append(new_beam_directions)
-            # #beam_positions.append(new_beam_positions)
-            # #beam_directions = np.append(beam_directions, new_beam_directions, axis=1)
-            # #beam_positions = np.append(beam_positions, new_beam_positions, axis=1)
-
-    # move beam fronts
-    beam_positions += beam_directions
-
-    oob_hi = beam_positions >= np.matrix([[size_x], [size_y]])
-    oob_lo = beam_positions < np.matrix([[0], [0]])
-
-    hi0 = oob_hi[0,:]
-    hi1 = oob_hi[1,:]
-    oob_hi_rly = hi0 | hi1
-
-    lo0 = oob_lo[0,:]
-    lo1 = oob_lo[1,:]
-    oob_lo_rly = lo0 | lo1
-
-    oob = oob_hi_rly | oob_lo_rly
-
-    beam_positions = np.delete(beam_positions, oob.flat, axis=1)
-    beam_directions = np.delete(beam_directions, oob.flat, axis=1)
-
-    bpl = beam_positions.tolist() + beam_directions.tolist()
-    bpl = zip(*bpl) # transpose
-    bpl = list(set(bpl)) # dedup
-    bpl = list(zip(*bpl))
-
-    beam_positions = np.matrix(bpl[:2])
-    beam_directions = np.matrix(bpl[2:])
-
-    #energised[ beam_positions[0, :], beam_positions[1, :] ] = 1
-
-    nrow, ncol = beam_positions.shape
-    assert nrow == 2
-    for col in range(ncol):
-        bd = beam_positions[:, col]
-        x = bd[0].sum()
-        y = bd[1].sum()
-        energised.add((x,y))
-
-    print('iteration {}, num beams {}'.format(it, beam_positions.shape[1]))
-    it += 1
-
-print(energised)
-print_energised(energised)
-print(len(energised))
+print(ncovered)
+print(max(ncovered))
