@@ -3,7 +3,10 @@
 import numpy as np
 import sys
 
-infilename = 'sample-input'
+if len(sys.argv) < 2:
+    infilename = 'sample-input'
+else:
+    infilename = sys.argv[1]
 
 
 class bcolors:
@@ -11,6 +14,9 @@ class bcolors:
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
     OKGREEN = '\033[92m'
+    BGBLUE = '\033[44m'
+    BGCYAN = '\033[46m'
+    BGGREEN = '\033[42m'
     WARNING = '\033[93m'
     FAIL = '\033[91m'
     ENDC = '\033[0m'
@@ -32,17 +38,17 @@ WESTLEAN_MIRROR = [np.matrix([[0,1],
 EASTLEAN_MIRROR = [np.matrix([[0,-1],
                               [-1,0]], dtype=int)]
 
-NS_SPLITTER     = [np.matrix([[0,1],
+NS_SPLITTER     = [np.matrix([[0,0],
                               [1,1]], dtype=int),
 
-                   np.matrix([[0,-1],
-                              [1,1]], dtype=int)]
+                   np.matrix([[0,0],
+                              [-1,1]], dtype=int)]
 
 WE_SPLITTER     = [np.matrix([[1,1],
-                              [0,1]], dtype=int),
+                              [0,0]], dtype=int),
 
-                   np.matrix([[1,1],
-                              [0,-1]], dtype=int)
+                   np.matrix([[1,-1],
+                              [0,0]], dtype=int)
                    ]
 CHAR_TO_DEVICE = {
     '/' : EASTLEAN_MIRROR,
@@ -55,18 +61,22 @@ CHAR_TO_DEVICE = {
 size_x = 0
 size_y = 0
 for yy, line in enumerate(lines):
-    for xx, char in enumerate(line):
+    if not line.strip():
+        continue
+    for xx, char in enumerate(line.strip()):
         if char in CHAR_TO_DEVICE:
             grid_devices[(xx, yy)] = CHAR_TO_DEVICE[char]
         size_x = xx
     size_y = yy
-xx += 1
-yy += 1
+size_x += 1
+size_y += 1
+print('size:', size_x, size_y)
 
 states = set()
 it = 0
 
-energised = np.zeros((size_x, size_y), dtype=bool)
+#energised = np.zeros((size_x, size_y), dtype=bool)
+energised = set((0,0))
 
 M_2VEC_ADD_DIMS = np.matrix([1,1], dtype=int)
 
@@ -74,21 +84,37 @@ def print_grid(bpositions):
     for yy in range(size_y):
         for xx in range(size_x):
             if ((bpositions == np.matrix([[xx],[yy]])).prod(axis=0)).any():
-                print(bcolors.OKCYAN, end='')
+                print(bcolors.BGCYAN, end='')
+            #print(lines[yy][xx], end='')
+            print(yy, end='')
+            print(bcolors.ENDC, end='')
+        print()
+
+def print_energised(en):
+    for yy in range(size_y):
+        for xx in range(size_x):
+            if (xx, yy) in en:
+                print(bcolors.BGGREEN, end='')
             print(lines[yy][xx], end='')
             print(bcolors.ENDC, end='')
         print()
 
+## TODO: track individual beam loops
+
 while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in states:
-    print_grid(beam_positions)
+    #print_grid(beam_positions)
 
     #import pdb; pdb.set_trace()
-    assert all(s == 1 for s in (M_2VEC_ADD_DIMS * beam_directions).flat)
+    assert all(abs(s) == 1 for s in (M_2VEC_ADD_DIMS * beam_directions).flat)
 
     states.add((frozenset(beam_positions.flat), frozenset(beam_directions.flat)))
     # for beam directions, where beam position==grid device key, apply operations, removing old and appending new
 
     # apply operations
+
+    ## TODO: All the time is spent checking to see if x y has any beams (normally not)
+    # # Better to use sorting and hashing
+    # # Note it also slows down once there are a lot of beams.
     for (x,y), devlist in grid_devices.items():
         #import pdb; pdb.set_trace()
         #beams_here = (beam_positions==np.matrix([[x],[y]])).sum(axis=0).repeat(2, axis=0)
@@ -96,31 +122,66 @@ while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in s
         beams_here[0,:] &= beams_here[1,:]
         beams_here[1,:] = beams_here[0,:]
         if beams_here.any():
-            if len(devlist)>1:
-                new_beam_directions = devlist[1] * beam_directions[beams_here].T.copy()
-                new_beam_positions = beam_positions[beams_here].T.copy()
-            else:
-                new_beam_directions = np.matrix(';', dtype=int)
-                new_beam_positions = np.matrix(';', dtype=int)
+            old_beam_directions = [] # lost patience with numpy today
+            old_beam_positions  = []
+            nrow, ncol = beam_directions.shape
+            assert nrow == 2
+            for col in range(ncol):
+                old_beam_directions.append(beam_directions[:, col])
+                old_beam_positions.append(beam_positions[:,col])
+
+            new_beam_directions  = []
+            new_beam_positions  = []
+            for ii, (obp, obd) in enumerate(zip(old_beam_positions, old_beam_directions)):
+                if x == obp[0] and y == obp[1]:
+                    for dev in devlist:
+                        new_beam_directions.append(dev * obd)
+                        new_beam_positions.append(beam_positions[:, ii].copy())
+                else:
+                    new_beam_directions.append(obd)
+                    new_beam_positions.append(beam_positions[:, ii].copy())
+
+            # V Wrong, doesn't account for location.
+            # assert len(new_beam_directions) == (len(old_beam_directions)
+            #                                     + (1 if len(devlist) == 2 and else 0))
+            assert len(new_beam_directions) == len(new_beam_positions)
+
+            beam_directions = np.matrix(';', dtype=int)
+            beam_positions = np.matrix(';', dtype=int)
+            for bd in new_beam_directions:
+                beam_directions = np.concatenate([beam_directions, bd], axis=1)
+
+            for bp in new_beam_positions:
+                beam_positions = np.concatenate([beam_positions, bp], axis=1)
+                #np.append(beam_positions, bp, axis=1)
+
+            assert beam_positions.shape == beam_directions.shape
+
+            #if len(devlist)>1:
+                #new_beam_directions = devlist[1] * beam_directions[beams_here].T.copy()
+                #new_beam_positions = beam_positions[beams_here].T.copy()
+            #else:
+                #new_beam_directions = np.matrix(';', dtype=int)
+                #new_beam_positions = np.matrix(';', dtype=int)
 
             #bdt = beam_directions[beams_here].T
             #bdt[:] = devlist[0] * beam_directions[beams_here].T
 
             #bdt = devlist[0] * beam_directions[beams_here].T
 
-            beam_directions_nsel = beam_directions & ~beams_here
-            beam_directions_sel  = beam_directions &  beams_here
+            #beam_directions_nsel = beam_directions & ~beams_here
+            #beam_directions_sel  = beam_directions &  beams_here
 
-            beam_directions_sel = devlist[0] * beam_directions_sel
+            #beam_directions_sel = devlist[0] * beam_directions_sel
 
-            import pdb; pdb.set_trace()
-            beam_directions = beam_directions_sel + beam_directions_nsel
+            #import pdb; pdb.set_trace()
+            #beam_directions = beam_directions_sel + beam_directions_nsel
 
 
             #beam_directions.append(new_beam_directions)
             #beam_positions.append(new_beam_positions)
-            beam_directions = np.append(beam_directions, new_beam_directions, axis=1)
-            beam_positions = np.append(beam_positions, new_beam_positions, axis=1)
+            #beam_directions = np.append(beam_directions, new_beam_directions, axis=1)
+            #beam_positions = np.append(beam_positions, new_beam_positions, axis=1)
 
     # move beam fronts
     beam_positions += beam_directions
@@ -144,9 +205,19 @@ while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in s
     #import pdb;
     #pdb.set_trace()
 
-    energised[ beam_positions[0, :], beam_positions[1, :] ] = 1
+    #energised[ beam_positions[0, :], beam_positions[1, :] ] = 1
+
+    nrow, ncol = beam_positions.shape
+    assert nrow == 2
+    for col in range(ncol):
+        bd = beam_positions[:, col]
+        x = bd[0].sum()
+        y = bd[1].sum()
+        energised.add((x,y))
 
     print('iteration {}'.format(it))
     it += 1
 
 print(energised)
+print_energised(energised)
+print(len(energised))
