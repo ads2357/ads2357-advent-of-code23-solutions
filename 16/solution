@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+
+import functools
+import itertools
+import collections
+import numpy as np
+import sys
+from zlib import adler32
+
+if len(sys.argv) < 2:
+    infilename = 'sample-input'
+else:
+    infilename = sys.argv[1]
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    BGBLUE = '\033[44m'
+    BGCYAN = '\033[46m'
+    BGGREEN = '\033[42m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+with open(infilename, 'r') as infile:
+    lines = infile.readlines()
+
+grid_devices = collections.defaultdict(list)
+
+WESTLEAN_MIRROR = [np.matrix([[0,1],
+                              [1,0]], dtype=int)]
+
+EASTLEAN_MIRROR = [np.matrix([[0,-1],
+                              [-1,0]], dtype=int)]
+
+NS_SPLITTER     = [np.matrix([[0,0],
+                              [1,1]], dtype=int),
+
+                   np.matrix([[0,0],
+                              [-1,1]], dtype=int)]
+
+WE_SPLITTER     = [np.matrix([[1,1],
+                              [0,0]], dtype=int),
+
+                   np.matrix([[1,-1],
+                              [0,0]], dtype=int)
+                   ]
+
+EMPTY = [ np.matrix([[1,0],[0,1]], dtype=int) ]
+
+CHAR_TO_DEVICE = {
+    '/' : EASTLEAN_MIRROR,
+    '\\' : WESTLEAN_MIRROR,
+    '|' : NS_SPLITTER,
+    '-' : WE_SPLITTER,
+    '.' : EMPTY,
+}
+
+# Make grid devices map from input
+size_x = 0
+size_y = 0
+for yy, line in enumerate(lines):
+    if not line.strip():
+        continue
+    for xx, char in enumerate(line.strip()):
+        #if char in CHAR_TO_DEVICE:
+            #grid_devices[(xx, yy)] = CHAR_TO_DEVICE[char]
+        grid_devices[xx, yy] = CHAR_TO_DEVICE[char]
+        size_x = xx
+    size_y = yy
+size_x += 1
+size_y += 1
+print('size:', size_x, size_y)
+
+def print_grid(states):
+    for yy in range(size_y):
+        for xx in range(size_x):
+            if any(p == (xx,yy) for p, _ in states):
+                print(bcolors.BGCYAN, end='')
+            print(yy, end='')
+            print(bcolors.ENDC, end='')
+        print()
+
+def print_energised(en):
+    printed = []
+
+    for yy in range(size_y):
+        for xx in range(size_x):
+            if (xx, yy) in en:
+                print(bcolors.BGGREEN, end='')
+                printed.append((xx,yy))
+            print(lines[yy][xx], end='')
+            print(bcolors.ENDC, end='')
+        print()
+    print (len(printed))
+    print (len(en))
+    print (printed)
+    print (set(en) - set(printed))
+    print()
+
+def is_in_bounds(pos):
+    return (0 <= pos[0] < size_x
+            and 0 <= pos[1] < size_y)
+
+sys.setrecursionlimit(12210)
+
+@functools.cache
+def trace_beam(pos, direction):
+    """Traces a single beam until it hits something, returns state and new
+    beams (if any)."""
+
+    cov = set()
+
+    mpos = np.matrix(pos).T
+    mdir = np.matrix(direction).T
+
+    if is_in_bounds(pos):
+        cov.add(pos)
+
+    vec2tup = lambda sd: tuple(sd.T.tolist()[0]) # unwrap since single column matrix (ew)
+
+    succ_dir = [ devmat * mdir for devmat in grid_devices[pos] ]
+    while len(succ_dir) == 1:
+        mpos += succ_dir[0]
+        pos = vec2tup(mpos)
+
+        if not is_in_bounds(pos):
+            return cov, set()
+
+        cov.add(pos)
+        mdir = succ_dir[0]
+        succ_dir = [ devmat * mdir for devmat in grid_devices[pos] ]
+
+    return cov, { (vec2tup(mpos + sd), vec2tup(sd)) for sd in succ_dir }
+
+def do_thing(pos, direction):
+    outstanding_beams = {(pos, direction)}
+    beams_done_already = set()
+    covered_coords = set()
+
+    while outstanding_beams:
+        new_outstanding_beams = set()
+        for bpos, bdir in outstanding_beams:
+            bcov, newb = trace_beam(bpos, bdir)
+            covered_coords |= bcov
+            new_outstanding_beams |= newb
+
+        beams_done_already |= outstanding_beams
+
+        outstanding_beams = new_outstanding_beams - beams_done_already
+
+    return covered_coords
+
+covered = do_thing((0,0), (1,0))
+print_energised(covered)
+print(len(covered))
+
+ncovered = []
+
+for xx in range(size_x):
+    start = (xx, 0)
+    direc = (0, 1)
+    ncovered.append(len(do_thing(start, direc)))
+
+for xx in range(size_x):
+    start = (xx, size_y-1)
+    direc = (0, -1)
+    ncovered.append(len(do_thing(start, direc)))
+
+for yy in range(size_y):
+    start = (0, yy)
+    direc = (1,0)
+    ncovered.append(len(do_thing(start, direc)))
+
+for yy in range(size_y):
+    start = (size_x-1, yy)
+    direc = (-1,0)
+    ncovered.append(len(do_thing(start, direc)))
+
+print(ncovered)
+print(max(ncovered))
