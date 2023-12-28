@@ -107,7 +107,8 @@ dev_loc_matrix = np.matrix([[x,y] for x, y in grid_devices.keys()]).T.T
 dev_loc_matrix_x = dev_loc_matrix[:,0]
 dev_loc_matrix_y = dev_loc_matrix[:,1]
 
-while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in states:
+#while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in states:
+for ii in range(1000):
     #print_grid(beam_positions)
 
     #import pdb; pdb.set_trace()
@@ -244,8 +245,13 @@ while (frozenset(beam_positions.flat), frozenset(beam_directions.flat)) not in s
     beam_positions = np.delete(beam_positions, oob.flat, axis=1)
     beam_directions = np.delete(beam_directions, oob.flat, axis=1)
 
-    #import pdb;
-    #pdb.set_trace()
+    bpl = beam_positions.tolist() + beam_directions.tolist()
+    bpl = zip(*bpl) # transpose
+    bpl = list(set(bpl)) # dedup
+    bpl = list(zip(*bpl))
+
+    beam_positions = np.matrix(bpl[:2])
+    beam_directions = np.matrix(bpl[2:])
 
     #energised[ beam_positions[0, :], beam_positions[1, :] ] = 1
 
