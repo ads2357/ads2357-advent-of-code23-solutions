@@ -76,7 +76,7 @@ states = set()
 it = 0
 
 #energised = np.zeros((size_x, size_y), dtype=bool)
-energised = set((0,0))
+energised = set([(0,0)])
 
 M_2VEC_ADD_DIMS = np.matrix([1,1], dtype=int)
 
