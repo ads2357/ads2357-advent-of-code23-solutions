@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+
+import itertools
+import numpy as np
+
+infilename = 'sample-input'
+infilename = 'input'
+#bound_min = np.array([7,7])
+#bound_max = np.array([27,27])
+
+bound_min = np.array([200000000000000,200000000000000])
+bound_max = np.array([400000000000000,400000000000000])
+
+with open(infilename, 'r') as f:
+    inlines = f.readlines()
+
+stones = []
+
+for line in inlines:
+    if not line.strip():
+        break
+    s_str, v_str = line.split('@')
+    s, v = ( [ int(s) for s in sv_str.split(',') ] for sv_str in line.split('@') )
+
+    stones.append((np.array(s[:2]),np.array(v[:2])))
+
+pairs = list(itertools.combinations(enumerate(stones),2))
+
+def is_parallel(v0, v1):
+    return all(np.cross(v0, v1) == np.zeros_like(v0))
+
+crossings = []
+
+ii=0
+
+import sys
+
+print('greet')
+
+# TODO: remove jank and mystery negations
+
+for (i0, (s0, v0)), (i1, (s1, v1)) in pairs:
+    #sys.stderr.write('{}\r'.format(ii))
+    ii += 1
+    #sys.stderr.flush()
+
+    if is_parallel(v0, v1):
+        #print(s0, v0, ',', s1, v1, ' parallel')
+        continue
+
+    ds = s0 - s1
+    coeff = np.array([v0, v1]).T
+
+    times = np.linalg.solve(coeff, ds)
+
+    int0 = s0 + times[0] * v0
+    int1 = s1 + times[1] * v1
+
+    #print(times, i0, i1)
+    #print('')
+
+    if not (times[0] <= 0 and times[1] >= 0):
+        #print(s0, v0, ',', s1, v1, 'past')
+        continue
+
+    if (int1 < bound_min).any() or (int1 > bound_max).any():
+        #print(s0, v0, ',', s1, v1, 'bounds')
+        continue
+
+    crossings.append((int0, int1))
+
+print(len(crossings), '/', len(pairs))
+
+## Part 2
+
+### Idea: conn line between stones, intercept to other stone.
+
+s0, v0 = stones[0]
+s1, v1 = [(s,v) for s,v in stones if not is_parallel(v, v0)][0]
+s2, v2 = [(s,v) for s,v in stones if not is_parallel(v, v0) and not is_parallel(v,v1)][0] # perf opt
+
+# conn: a + kb
+# t=0:  s0 + k(s1-s0)
+# t=t:  s0+t.v0 + k(s1+t.v1 - s0 - t.v0)
+
+# conn(t,k) = stone[2](t)
+# conn(t,k) - stone[2](t) = 0
+
+# A non-linear problem because t and k are multiplied together. (Makes sense!)
+
+# k.t is annoying, but could multiply the y member of the system of
+# equations to make the k.t coeff the same, then subtract one from the
+# other to get rid of k.t. Leaves us with a two-variable linear
+# equation to solve, but we only have one equation left.
+
+# We could try to do the same with all other triplets of stones. Each
+# one would create a new 'k' and 't'. However, they could be pulled
+# together because all the solutions have to lie in a straight line.
+
+# Or try pulling in just one more stone? Acting like the third stone
+# we already introduced? Produces two more variables, t3 and k3. 
+
