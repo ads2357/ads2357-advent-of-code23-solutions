@@ -24,6 +24,7 @@ for line in inlines:
 
     stones.append((np.array(s[:2]),np.array(v[:2])))
 
+# list for debugging sample input, don't care about memory.
 pairs = list(itertools.combinations(enumerate(stones),2))
 
 def is_parallel(v0, v1):
@@ -39,25 +40,28 @@ print('greet')
 
 # TODO: remove jank and mystery negations
 
+# keep it simple: check whether each pair crosses in the future.
 for (i0, (s0, v0)), (i1, (s1, v1)) in pairs:
     #sys.stderr.write('{}\r'.format(ii))
     ii += 1
     #sys.stderr.flush()
 
+    # parallel - no cross
     if is_parallel(v0, v1):
         #print(s0, v0, ',', s1, v1, ' parallel')
         continue
 
+    # close the initial distance using the velocities:
+    # v0 . t + v1 . t = s1 - s0
+    # i.e. V.t = d, a linear system.
     ds = s0 - s1
     coeff = np.array([v0, v1]).T
 
     times = np.linalg.solve(coeff, ds)
 
+    # recover intercepts for bounds check
     int0 = s0 + times[0] * v0
     int1 = s1 + times[1] * v1
-
-    #print(times, i0, i1)
-    #print('')
 
     if not (times[0] <= 0 and times[1] >= 0):
         #print(s0, v0, ',', s1, v1, 'past')
@@ -98,5 +102,17 @@ s2, v2 = [(s,v) for s,v in stones if not is_parallel(v, v0) and not is_parallel(
 # together because all the solutions have to lie in a straight line.
 
 # Or try pulling in just one more stone? Acting like the third stone
-# we already introduced? Produces two more variables, t3 and k3. 
+# we already introduced? Produces two more variables, t3 and k3. But
+# now we can create more connections between pairs of stones
+# intercepting third stones. The 't's will be shared.
 
+
+
+# On the other hand, could simply use:
+## s_rock + t_rock_and_stone . v_rock = s_stone + t_rock_and_stone . v_stone, for all stones.
+## Sum over all stones to produce a vector/matrix equation, with unknown t and unknown s_rock, v_rock.
+## Solve numerically. (Probably slow because such a multidimensional space: 300 dimensions, wide range.)
+
+def func(times_and_sr_and_vr, stones, n):
+    times = times_and_sr_and_vr[n]
+    
